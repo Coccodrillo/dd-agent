@@ -325,9 +325,10 @@ class Redis(AgentCheck):
             if slowlog['start_time'] > max_ts:
                 max_ts = slowlog['start_time']
 
-            command_tag = 'command:{0}'.format(slowlog['command'].split()[0])
+            if len(slowlog['command'])>0:
+                tags += ['command:{0}'.format(slowlog['command'].split()[0])]
             value = slowlog['duration']
-            self.histogram('redis.slowlog.micros', value, tags=tags + [command_tag])
+            self.histogram('redis.slowlog.micros', value, tags=tags)
 
         self.last_timestamp_seen[ts_key] = max_ts
 

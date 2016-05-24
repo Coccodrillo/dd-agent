@@ -58,12 +58,12 @@ class KubeUtil():
         self.cadvisor_port = instance.get('port', KubeUtil.DEFAULT_CADVISOR_PORT)
         self.kubelet_port = instance.get('kubelet_port', KubeUtil.DEFAULT_KUBELET_PORT)
 
-        self.metrics_url = urljoin(
-            '%s://%s:%d' % (self.method, self.host, self.cadvisor_port), KubeUtil.METRICS_PATH)
-        self.pods_list_url = urljoin(
-            '%s://%s:%d' % (self.method, self.host, self.kubelet_port), KubeUtil.PODS_LIST_PATH)
+        self.kubelet_api_url = '%s://%s:%d' % (self.method, self.host, self.kubelet_port)
+        self.cadvisor_url = '%s://%s:%d' % (self.method, self.host, self.cadvisor_port)
 
-        self.kube_health_url = '%s://%s:%d/healthz' % (self.method, self.host, self.kubelet_port)
+        self.metrics_url = urljoin(self.cadvisor_url, KubeUtil.METRICS_PATH)
+        self.pods_list_url = urljoin(self.kubelet_api_url, KubeUtil.PODS_LIST_PATH)
+        self.kube_health_url = urljoin(self.kubelet_api_url, 'healthz')
 
     def get_kube_labels(self, excluded_keys=None):
         pods = retrieve_json(self.pods_list_url)
@@ -93,8 +93,33 @@ class KubeUtil():
 
         return kube_labels
 
+    def extract_uids(self, pods_list):
+        """
+        Exctract uids from a list of pods coming from the kubelet API.
+        """
+        uids = []
+        pods = pods_list.get("items") or []
+        for p in pods:
+            uid = p.get('metadata', {}).get('uid')
+            if uid is not None:
+                uids.append(uid)
+        return uids
+
     def retrieve_pods_list(self):
         return retrieve_json(self.pods_list_url)
+
+    def filter_pods_list(self, pods_list, host_ip):
+        """
+        Filter out in place pods that are not running on the given host.
+        """
+        filtered_pods = []
+        pod_items = pods_list.get('items') or []
+        for pod in pod_items:
+            status = pod.get('status', {})
+            if status.get('hostIP') == host_ip:
+                filtered_pods.append(pod)
+        pods_list['items'] = filtered_pods
+        return pods_list
 
     @classmethod
     def _get_default_router(cls):
